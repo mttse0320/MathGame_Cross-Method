@@ -65,6 +65,7 @@
             border-radius: 6px;
             cursor: pointer;
             transition: background-color 0.2s, transform 0.1s;
+            touch-action: manipulation;
         }
 
         button:hover { background-color: #45a049; }
@@ -121,6 +122,7 @@
             overflow: hidden;
             background-color: #fafbfc;
             margin-bottom: 20px;
+            touch-action: none; /* Disables default scrolling inside workspace when touching tiles */
         }
 
         .tile {
@@ -133,8 +135,10 @@
             color: rgba(0,0,0,0.6);
             box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
             user-select: none;
+            -webkit-user-select: none;
             border: 1px solid rgba(0,0,0,0.1);
             transition: transform 0.1s;
+            touch-action: none; /* Prevents mobile scrolling on tile drag */
         }
         
         .tile:active { cursor: grabbing; z-index: 1000 !important; }
@@ -201,7 +205,7 @@
     
     <div class="instructions">
         <strong>Instructions:</strong> Drag tiles to form a perfect rectangle. <br>
-        <em>Double-click a rectangle 'x' tile to rotate it. Drag tiles off the board to delete them (Custom Mode).</em>
+        <em>Double-tap an 'x' tile to rotate it. Drag tiles off the board to delete them (Custom Mode).</em>
     </div>
 
     <div class="tile-bank" id="tile-bank">
@@ -252,25 +256,19 @@
         return eqStr;
     }
 
-    // NEW: Random Question Generator Working Backwards
     function generateQuestion(mode) {
         let A, B, C, D;
-        
-        // Pick random numbers between 1 and 3 (to keep tile counts low for the screen)
-        A = Math.floor(Math.random() * 2) + 1; // 1 or 2
-        B = Math.floor(Math.random() * 3) + 1; // 1 to 3
+        A = Math.floor(Math.random() * 2) + 1;
+        B = Math.floor(Math.random() * 3) + 1;
         
         if (mode === 1 || (mode === 3 && Math.random() < 0.5)) {
-            // Perfect Square: (Ax + B)(Ax + B)
             C = A;
             D = B;
         } else {
-            // Cross-Method: (Ax + B)(Cx + D)
             C = Math.floor(Math.random() * 2) + 1;
             D = Math.floor(Math.random() * 4) + 1; 
         }
 
-        // Expand to a, b, c
         let a = A * C;
         let b = (A * D) + (B * C);
         let c = B * D;
@@ -310,7 +308,7 @@
 
     function initLevel() {
         if(currentMode !== 4) {
-            activeQuestionData = generateQuestion(currentMode); // Calls our new random generator!
+            activeQuestionData = generateQuestion(currentMode);
             document.getElementById('equation-display').innerText = formatEquation(activeQuestionData.a, activeQuestionData.b, activeQuestionData.c);
             autoSpawnTiles(activeQuestionData.a, activeQuestionData.b, activeQuestionData.c);
         }
@@ -385,102 +383,11 @@
         tile.style.left = `${(workspace.offsetWidth / 2) - 45 + (Math.random()*150-75)}px`;
         tile.style.top = `${(workspace.offsetHeight / 2) - 45 + (Math.random()*150-75)}px`;
 
+        // Double tap or double click rotation logic for mobile & desktop
+        let lastTap = 0;
         if(shapeClass === 'tile-x') {
-            tile.addEventListener('dblclick', function() { this.classList.toggle('rotated'); });
-        }
-
-        let isDragging = false, startX, startY, initialLeft, initialTop;
-
-        tile.addEventListener('mousedown', (e) => {
-            isDragging = true; startX = e.clientX; startY = e.clientY;
-            initialLeft = parseInt(tile.style.left, 10) || 0; initialTop = parseInt(tile.style.top, 10) || 0;
-            
-            document.querySelectorAll('.tile').forEach(t => t.style.zIndex = parseInt(t.style.zIndex) > 0 ? parseInt(t.style.zIndex) - 1 : 0);
-            tile.style.zIndex = 1000;
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            tile.style.left = `${initialLeft + (e.clientX - startX)}px`;
-            tile.style.top = `${initialTop + (e.clientY - startY)}px`;
-        });
-
-        document.addEventListener('mouseup', (e) => { 
-            if(isDragging) {
-                isDragging = false; 
-                if (currentMode === 4) {
-                    const rect = workspace.getBoundingClientRect();
-                    if (e.clientX < rect.left - 20 || e.clientX > rect.right + 20 || e.clientY < rect.top - 20 || e.clientY > rect.bottom + 20) {
-                        if (tile.parentNode === workspace) workspace.removeChild(tile);
-                    }
-                }
-            }
-        });
-        
-        workspace.appendChild(tile);
-    }
-
-    function checkMathematicalMatch(A, B, C, D, a, b, c) {
-        return (A * C === a) && ((A * D) + (B * C) === b) && (B * D === c);
-    }
-
-    function checkAnswer() {
-        if (!document.getElementById('workspace').hasChildNodes()) {
-            showFeedback("The board is empty!", 'warning'); return;
-        }
-
-        const target = activeQuestionData;
-        let isCorrect = false;
-
-        if (currentMode === 1) {
-            const A_in = parseInt(document.getElementById('ps-ans-a').value) || 1; 
-            const B_in = parseInt(document.getElementById('ps-ans-b').value);
-            if (isNaN(B_in)) { showFeedback("Please fill in the number!", 'warning'); return; }
-            isCorrect = checkMathematicalMatch(A_in, B_in, A_in, B_in, target.a, target.b, target.c);
-        } else {
-            const A_in = parseInt(document.getElementById('ans-a').value) || 1; 
-            const B_in = parseInt(document.getElementById('ans-b').value);
-            const C_in = parseInt(document.getElementById('ans-c').value) || 1;
-            const D_in = parseInt(document.getElementById('ans-d').value);
-
-            if (isNaN(B_in) || isNaN(D_in)) { showFeedback("Please fill in all numbers!", 'warning'); return; }
-            isCorrect = checkMathematicalMatch(A_in, B_in, C_in, D_in, target.a, target.b, target.c) ||
-                        checkMathematicalMatch(C_in, D_in, A_in, B_in, target.a, target.b, target.c);
-        }
-
-        if (isCorrect) {
-            showFeedback("Correct! You built a perfect rectangle and factored it.", 'correct');
-            if (currentMode !== 4 && document.getElementById('next-btn').style.display !== 'inline-block') {
-                score += 10; document.getElementById('score').innerText = score;
-                document.getElementById('next-btn').style.display = 'inline-block';
-            }
-        } else {
-            showFeedback("Not quite right. Check your factors!", 'incorrect');
-        }
-    }
-
-    function nextQuestion() {
-        if (currentMode !== 4) { initLevel(); } // Now simply generates a new level!
-    }
-
-    function resetAnswerInputs() {
-        ['ans-a', 'ans-b', 'ans-c', 'ans-d', 'ps-ans-a', 'ps-ans-b'].forEach(id => {
-            const el = document.getElementById(id); if (el) el.value = '';
-        });
-        document.getElementById('next-btn').style.display = 'none';
-        showFeedback('', 'none');
-    }
-
-    function saveToPDF() {
-        const element = document.getElementById('game-container');
-        html2pdf().set({
-            margin: 0.5, filename: 'Factorization_Game.pdf',
-            image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 },
-            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
-        }).from(element).save();
-    }
-
-    window.onload = () => { setMode(1, document.querySelector('.mode-btn.active')); };
-</script>
-</body>
-</html>
+            tile.addEventListener('pointerdown', (e) => {
+                const currentTime = new Date().getTime();
+                const tapLength = currentTime - lastTap;
+                if (tapLength < 300 && tapLength > 0) {
+                    tile.classList.toggle('
