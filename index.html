@@ -270,4 +270,265 @@
             D = B;
         } else {
             C = Math.floor(Math.random() * 2) + 1;
-            D = Math.floor(Math.random() * 4) + 1;
+            D = Math.floor(Math.random() * 4) + 1; 
+        }
+
+        let a = A * C;
+        let b = (A * D) + (B * C);
+        let c = B * D;
+
+        return { a, b, c };
+    }
+
+    function setMode(modeNum, btnElement) {
+        currentMode = modeNum;
+        score = 0; document.getElementById('score').innerText = score;
+        showFeedback('', 'none');
+
+        document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+        btnElement.classList.add('active');
+
+        const stdArea = document.getElementById('standard-question-area');
+        const custArea = document.getElementById('custom-input-area');
+        const psAnswer = document.getElementById('perfect-square-answer-area');
+        const stdAnswer = document.getElementById('standard-answer-area');
+        const tileBank = document.getElementById('tile-bank');
+        
+        if (modeNum === 1) { psAnswer.style.display = 'flex'; stdAnswer.style.display = 'none'; } 
+        else { psAnswer.style.display = 'none'; stdAnswer.style.display = 'flex'; }
+
+        if (modeNum === 4) {
+            stdArea.style.display = 'none'; 
+            custArea.style.display = 'flex';
+            tileBank.style.display = 'flex'; 
+            setCustomQuestion();
+        } else {
+            stdArea.style.display = 'block'; 
+            custArea.style.display = 'none';
+            tileBank.style.display = 'none'; 
+            initLevel();
+        }
+    }
+
+    function initLevel() {
+        if(currentMode !== 4) {
+            activeQuestionData = generateQuestion(currentMode);
+            document.getElementById('equation-display').innerText = formatEquation(activeQuestionData.a, activeQuestionData.b, activeQuestionData.c);
+            autoSpawnTiles(activeQuestionData.a, activeQuestionData.b, activeQuestionData.c);
+        }
+        resetAnswerInputs();
+    }
+
+    function setCustomQuestion() {
+        const a = parseInt(document.getElementById('cust-a').value) || 0;
+        const b = parseInt(document.getElementById('cust-b').value) || 0;
+        const c = parseInt(document.getElementById('cust-c').value) || 0;
+        
+        if (a < 1 || b < 1 || c < 1 || a > 10 || b > 20 || c > 20) {
+            showFeedback("Please keep values positive (a: 1-10, b/c: 1-20) to keep the board clean!", 'warning');
+            return;
+        }
+        
+        activeQuestionData = { a, b, c };
+        clearWorkspace();
+        resetAnswerInputs();
+        showFeedback("Custom positive equation set! Add tiles from the bank to build it.", 'correct');
+    }
+
+    function clearWorkspace() {
+        document.getElementById('workspace').innerHTML = '';
+        maxZIndex = 10;
+    }
+
+    function getFactors(a, b, c) {
+        for (let A = 1; A <= a; A++) {
+            if (a % A !== 0) continue;
+            let C = a / A;
+            for (let B = 1; B <= c; B++) {
+                if (c % B !== 0) continue;
+                let D = c / B;
+                if (A * D + B * C === b) {
+                    return {A, B, C, D};
+                }
+            }
+        }
+        return null;
+    }
+
+    function autoSpawnTiles(a, b, c) {
+        clearWorkspace();
+        const factors = getFactors(a, b, c);
+        if (!factors) {
+            showFeedback("Error: Equation is not easily factorable.", 'warning');
+            return;
+        }
+
+        const {A, B, C, D} = factors;
+        spawnSpecificTiles(A * C, 'tile-x2', 'pos-x2', '+');
+        spawnSpecificTiles(A * D, 'tile-x', 'pos-x', '+');
+        spawnSpecificTiles(B * C, 'tile-x', 'pos-x', '+');
+        spawnSpecificTiles(B * D, 'tile-1', 'pos-1', '+');
+    }
+
+    function spawnSpecificTiles(count, shapeClass, posClass, signText) {
+        if (count === 0) return;
+        for (let i = 0; i < count; i++) {
+            addTile(shapeClass, posClass, signText);
+        }
+    }
+
+    function addTile(shapeClass, colorClass, signText) {
+        const workspace = document.getElementById('workspace');
+        const tile = document.createElement('div');
+        tile.className = `tile ${shapeClass} ${colorClass}`;
+        tile.innerText = signText;
+        
+        maxZIndex++;
+        tile.style.zIndex = maxZIndex;
+
+        const wsW = workspace.clientWidth || 300;
+        const wsH = workspace.clientHeight || 400;
+        const minX = 20;
+        const maxX = Math.max(20, wsW - 100);
+        const minY = 20;
+        const maxY = Math.max(20, wsH - 100);
+
+        tile.style.left = `${Math.floor(Math.random() * (maxX - minX) + minX)}px`;
+        tile.style.top = `${Math.floor(Math.random() * (maxY - minY) + minY)}px`;
+
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let initialLeft = 0, initialTop = 0;
+        let lastTap = 0;
+
+        function getCoordinates(e) {
+            if (e.touches && e.touches.length > 0) {
+                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            } else if (e.changedTouches && e.changedTouches.length > 0) {
+                return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+            }
+            return { x: e.clientX, y: e.clientY };
+        }
+
+        function handleStart(e) {
+            const now = new Date().getTime();
+            if (shapeClass === 'tile-x' && (now - lastTap < 300) && (now - lastTap > 0)) {
+                tile.classList.toggle('rotated');
+                if (e.cancelable) e.preventDefault();
+                lastTap = 0;
+                return;
+            }
+            lastTap = now;
+
+            isDragging = true;
+            const coords = getCoordinates(e);
+            startX = coords.x;
+            startY = coords.y;
+            initialLeft = parseInt(tile.style.left, 10) || 0;
+            initialTop = parseInt(tile.style.top, 10) || 0;
+
+            maxZIndex++;
+            tile.style.zIndex = maxZIndex;
+        }
+
+        function handleMove(e) {
+            if (!isDragging) return;
+            if (e.cancelable) e.preventDefault(); 
+
+            const coords = getCoordinates(e);
+            const deltaX = coords.x - startX;
+            const deltaY = coords.y - startY;
+
+            tile.style.left = `${initialLeft + deltaX}px`;
+            tile.style.top = `${initialTop + deltaY}px`;
+        }
+
+        function handleEnd(e) {
+            if (!isDragging) return;
+            isDragging = false;
+
+            if (currentMode === 4) {
+                const rect = workspace.getBoundingClientRect();
+                const coords = getCoordinates(e);
+                if (coords.x < rect.left - 20 || coords.x > rect.right + 20 || coords.y < rect.top - 20 || coords.y > rect.bottom + 20) {
+                    if (tile.parentNode === workspace) workspace.removeChild(tile);
+                }
+            }
+        }
+
+        tile.addEventListener('touchstart', handleStart, { passive: false });
+        window.addEventListener('touchmove', handleMove, { passive: false });
+        window.addEventListener('touchend', handleEnd);
+        window.addEventListener('touchcancel', handleEnd);
+
+        tile.addEventListener('mousedown', handleStart);
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleEnd);
+
+        workspace.appendChild(tile);
+    }
+
+    function checkMathematicalMatch(A, B, C, D, a, b, c) {
+        return (A * C === a) && ((A * D) + (B * C) === b) && (B * D === c);
+    }
+
+    function checkAnswer() {
+        if (!document.getElementById('workspace').hasChildNodes()) {
+            showFeedback("The board is empty!", 'warning'); return;
+        }
+
+        const target = activeQuestionData;
+        let isCorrect = false;
+
+        if (currentMode === 1) {
+            const A_in = parseInt(document.getElementById('ps-ans-a').value) || 1; 
+            const B_in = parseInt(document.getElementById('ps-ans-b').value);
+            if (isNaN(B_in)) { showFeedback("Please fill in the number!", 'warning'); return; }
+            isCorrect = checkMathematicalMatch(A_in, B_in, A_in, B_in, target.a, target.b, target.c);
+        } else {
+            const A_in = parseInt(document.getElementById('ans-a').value) || 1; 
+            const B_in = parseInt(document.getElementById('ans-b').value);
+            const C_in = parseInt(document.getElementById('ans-c').value) || 1;
+            const D_in = parseInt(document.getElementById('ans-d').value);
+
+            if (isNaN(B_in) || isNaN(D_in)) { showFeedback("Please fill in all numbers!", 'warning'); return; }
+            isCorrect = checkMathematicalMatch(A_in, B_in, C_in, D_in, target.a, target.b, target.c) ||
+                        checkMathematicalMatch(C_in, D_in, A_in, B_in, target.a, target.b, target.c);
+        }
+
+        if (isCorrect) {
+            showFeedback("Correct! You built a perfect rectangle and factored it.", 'correct');
+            if (currentMode !== 4 && document.getElementById('next-btn').style.display !== 'inline-block') {
+                score += 10; document.getElementById('score').innerText = score;
+                document.getElementById('next-btn').style.display = 'inline-block';
+            }
+        } else {
+            showFeedback("Not quite right. Check your factors!", 'incorrect');
+        }
+    }
+
+    function nextQuestion() {
+        if (currentMode !== 4) { initLevel(); }
+    }
+
+    function resetAnswerInputs() {
+        ['ans-a', 'ans-b', 'ans-c', 'ans-d', 'ps-ans-a', 'ps-ans-b'].forEach(id => {
+            const el = document.getElementById(id); if (el) el.value = '';
+        });
+        document.getElementById('next-btn').style.display = 'none';
+        showFeedback('', 'none');
+    }
+
+    function saveToPDF() {
+        const element = document.getElementById('game-container');
+        html2pdf().set({
+            margin: 0.5, filename: 'Factorization_Game.pdf',
+            image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 },
+            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+        }).from(element).save();
+    }
+
+    window.onload = () => { setMode(1, document.querySelector('.mode-btn.active')); };
+</script>
+</body>
+</html>
