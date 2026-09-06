@@ -172,6 +172,12 @@
             width: 55px; padding: 8px; font-size: 1em;
             border: 2px solid #ccc; border-radius: 4px; text-align: center;
         }
+
+        input.gcf-input {
+            width: 50px;
+            border: 2px dashed #2196F3;
+            background-color: #eef7ff;
+        }
         
         .instructions { font-size: 0.9em; color: #666; text-align: center; margin-bottom: 10px; }
         .feedback-area { text-align: center; font-size: 1.1em; font-weight: bold; min-height: 25px; margin-top: 5px; }
@@ -190,7 +196,8 @@
     </div>
 
     <div class="mode-selector">
-        <button class="mode-btn active" onclick="setMode(1, this)">Mode 1: Perfect Square</button>
+        <button class="mode-btn active" onclick="setMode(0, this)">Mode 0: Demo</button>
+        <button class="mode-btn" onclick="setMode(1, this)">Mode 1: Perfect Square</button>
         <button class="mode-btn" onclick="setMode(2, this)">Mode 2: Cross-Method</button>
         <button class="mode-btn" onclick="setMode(3, this)">Mode 3: Random</button>
         <button class="mode-btn" onclick="setMode(4, this)">Mode 4: Custom</button>
@@ -201,15 +208,15 @@
     </div>
 
     <div class="custom-input-area" id="custom-input-area">
-        <input type="number" id="cust-a" placeholder="a" value="1" min="1" max="10"> x² + 
-        <input type="number" id="cust-b" placeholder="b" value="5" min="1" max="20"> x + 
-        <input type="number" id="cust-c" placeholder="c" value="6" min="1" max="20">
+        <input type="number" id="cust-a" placeholder="a" value="1" min="1" max="8"> x² + 
+        <input type="number" id="cust-b" placeholder="b" value="5" min="1" max="8"> x + 
+        <input type="number" id="cust-c" placeholder="c" value="6" min="1" max="8">
         <button onclick="setCustomQuestion()">Set Question</button>
     </div>
     
     <div class="instructions">
         <strong>Instructions:</strong> Drag tiles to form a perfect rectangle. <br>
-        <em>Double-tap or double-click an 'x' tile to rotate it. Drag tiles off the board to delete them (Custom Mode).</em>
+        <em>If there is a common factor, enter it in the dashed box first! Double-tap an 'x' tile to rotate it.</em>
     </div>
 
     <div class="tile-bank" id="tile-bank">
@@ -222,10 +229,12 @@
     <div id="workspace"></div>
 
     <div class="answer-area" id="perfect-square-answer-area">
+        <input type="number" id="ps-gcf" class="gcf-input" placeholder="GCF">
         ( <input type="number" id="ps-ans-a" placeholder="a">x + <input type="number" id="ps-ans-b" placeholder="b"> )²
     </div>
 
     <div class="answer-area" id="standard-answer-area" style="display:none;">
+        <input type="number" id="std-gcf" class="gcf-input" placeholder="GCF">
         ( <input type="number" id="ans-a" placeholder="a">x + <input type="number" id="ans-b" placeholder="b"> ) 
         ( <input type="number" id="ans-c" placeholder="c">x + <input type="number" id="ans-d" placeholder="d"> )
     </div>
@@ -239,10 +248,27 @@
 </div>
 
 <script>
-    let currentMode = 1;
+    let currentMode = 0;
     let score = 0;
-    let activeQuestionData = { a: 1, b: 2, c: 1 };
+    let activeQuestionData = null;
     let maxZIndex = 10;
+
+    const mode0Questions = [
+        { a: 1, b: 2, c: 1, isPS: true, desc: "Demo Question 1/3" },
+        { a: 4, b: 8, c: 3, isPS: false, desc: "Demo Question 2/3" },
+        { a: 2, b: 6, c: 4, isPS: false, desc: "Demo Question 3/3 (Common Factor)" }
+    ];
+    let mode0Index = 0;
+
+    function gcd(x, y) {
+        x = Math.abs(x); y = Math.abs(y);
+        while (y) { let t = y; y = x % y; x = t; }
+        return x;
+    }
+
+    function getGCF(a, b, c) {
+        return gcd(a, gcd(b, c));
+    }
 
     function showFeedback(message, type) {
         const fb = document.getElementById('feedback-message');
@@ -261,23 +287,43 @@
     }
 
     function generateQuestion(mode) {
-        let A, B, C, D;
-        A = Math.floor(Math.random() * 2) + 1;
-        B = Math.floor(Math.random() * 3) + 1;
-        
-        if (mode === 1 || (mode === 3 && Math.random() < 0.5)) {
-            C = A;
-            D = B;
-        } else {
-            C = Math.floor(Math.random() * 2) + 1;
-            D = Math.floor(Math.random() * 4) + 1; 
-        }
+        let newQuestion;
+        let attempts = 0;
 
-        let a = A * C;
-        let b = (A * D) + (B * C);
-        let c = B * D;
+        do {
+            let A = Math.floor(Math.random() * 2) + 1;
+            let B = Math.floor(Math.random() * 3) + 1;
+            let C, D;
+            
+            if (mode === 1 || (mode === 3 && Math.random() < 0.5)) {
+                C = A;
+                D = B;
+            } else {
+                C = Math.floor(Math.random() * 2) + 1;
+                D = Math.floor(Math.random() * 3) + 1; 
+            }
 
-        return { a, b, c };
+            let g = (Math.random() < 0.3) ? 2 : 1; 
+
+            let a = A * C * g;
+            let b = ((A * D) + (B * C)) * g;
+            let c = B * D * g;
+
+            newQuestion = { a, b, c };
+            attempts++;
+
+            // Restraint range: max coefficient <= 8
+            if (a <= 8 && b <= 8 && c <= 8) {
+                if (activeQuestionData === null || 
+                    newQuestion.a !== activeQuestionData.a || 
+                    newQuestion.b !== activeQuestionData.b || 
+                    newQuestion.c !== activeQuestionData.c) {
+                    break;
+                }
+            }
+        } while (attempts < 100);
+
+        return newQuestion;
     }
 
     function setMode(modeNum, btnElement) {
@@ -290,12 +336,10 @@
 
         const stdArea = document.getElementById('standard-question-area');
         const custArea = document.getElementById('custom-input-area');
-        const psAnswer = document.getElementById('perfect-square-answer-area');
-        const stdAnswer = document.getElementById('standard-answer-area');
         const tileBank = document.getElementById('tile-bank');
         
-        if (modeNum === 1) { psAnswer.style.display = 'flex'; stdAnswer.style.display = 'none'; } 
-        else { psAnswer.style.display = 'none'; stdAnswer.style.display = 'flex'; }
+        activeQuestionData = null;
+        if (modeNum === 0) mode0Index = 0;
 
         if (modeNum === 4) {
             stdArea.style.display = 'none'; 
@@ -311,9 +355,29 @@
     }
 
     function initLevel() {
-        if(currentMode !== 4) {
+        const psAnswer = document.getElementById('perfect-square-answer-area');
+        const stdAnswer = document.getElementById('standard-answer-area');
+
+        if (currentMode === 0) {
+            activeQuestionData = mode0Questions[mode0Index];
+            if (activeQuestionData.isPS) {
+                psAnswer.style.display = 'flex'; stdAnswer.style.display = 'none';
+            } else {
+                psAnswer.style.display = 'none'; stdAnswer.style.display = 'flex';
+            }
+            document.getElementById('equation-display').innerText = 
+                `${formatEquation(activeQuestionData.a, activeQuestionData.b, activeQuestionData.c)} (${activeQuestionData.desc})`;
+        } else if (currentMode === 1) {
+            psAnswer.style.display = 'flex'; stdAnswer.style.display = 'none';
+            activeQuestionData = generateQuestion(1);
+            document.getElementById('equation-display').innerText = formatEquation(activeQuestionData.a, activeQuestionData.b, activeQuestionData.c);
+        } else if (currentMode === 2 || currentMode === 3) {
+            psAnswer.style.display = 'none'; stdAnswer.style.display = 'flex';
             activeQuestionData = generateQuestion(currentMode);
             document.getElementById('equation-display').innerText = formatEquation(activeQuestionData.a, activeQuestionData.b, activeQuestionData.c);
+        }
+
+        if (currentMode !== 4) {
             autoSpawnTiles(activeQuestionData.a, activeQuestionData.b, activeQuestionData.c);
         }
         resetAnswerInputs();
@@ -324,15 +388,15 @@
         const b = parseInt(document.getElementById('cust-b').value) || 0;
         const c = parseInt(document.getElementById('cust-c').value) || 0;
         
-        if (a < 1 || b < 1 || c < 1 || a > 10 || b > 20 || c > 20) {
-            showFeedback("Please keep values positive (a: 1-10, b/c: 1-20) to keep the board clean!", 'warning');
+        if (a < 1 || b < 1 || c < 1 || a > 8 || b > 8 || c > 8) {
+            showFeedback("Please keep values between 1 and 8 to keep the board clean!", 'warning');
             return;
         }
         
         activeQuestionData = { a, b, c };
         clearWorkspace();
         resetAnswerInputs();
-        showFeedback("Custom positive equation set! Add tiles from the bank to build it.", 'correct');
+        showFeedback("Custom equation set! Add tiles from the bank to build it.", 'correct');
     }
 
     function clearWorkspace() {
@@ -357,7 +421,12 @@
 
     function autoSpawnTiles(a, b, c) {
         clearWorkspace();
-        const factors = getFactors(a, b, c);
+        const gcf = getGCF(a, b, c);
+        const a_prime = a / gcf;
+        const b_prime = b / gcf;
+        const c_prime = c / gcf;
+
+        const factors = getFactors(a_prime, b_prime, c_prime);
         if (!factors) {
             showFeedback("Error: Equation is not easily factorable.", 'warning');
             return;
@@ -478,26 +547,39 @@
         }
 
         const target = activeQuestionData;
-        let isCorrect = false;
+        const targetGcf = getGCF(target.a, target.b, target.c);
+        const a_prime = target.a / targetGcf;
+        const b_prime = target.b / targetGcf;
+        const c_prime = target.c / targetGcf;
 
-        if (currentMode === 1) {
+        let isCorrect = false;
+        let isPSVisible = document.getElementById('perfect-square-answer-area').style.display !== 'none';
+
+        if (isPSVisible) {
+            const gcfVal = parseInt(document.getElementById('ps-gcf').value) || 1;
             const A_in = parseInt(document.getElementById('ps-ans-a').value) || 1; 
             const B_in = parseInt(document.getElementById('ps-ans-b').value);
-            if (isNaN(B_in)) { showFeedback("Please fill in the number!", 'warning'); return; }
-            isCorrect = checkMathematicalMatch(A_in, B_in, A_in, B_in, target.a, target.b, target.c);
+
+            if (isNaN(B_in)) { showFeedback("Please fill in all numbers!", 'warning'); return; }
+            if (gcfVal !== targetGcf) { showFeedback("Check the common factor in the dashed box!", 'warning'); return; }
+
+            isCorrect = checkMathematicalMatch(A_in, B_in, A_in, B_in, a_prime, b_prime, c_prime);
         } else {
+            const gcfVal = parseInt(document.getElementById('std-gcf').value) || 1;
             const A_in = parseInt(document.getElementById('ans-a').value) || 1; 
             const B_in = parseInt(document.getElementById('ans-b').value);
             const C_in = parseInt(document.getElementById('ans-c').value) || 1;
             const D_in = parseInt(document.getElementById('ans-d').value);
 
             if (isNaN(B_in) || isNaN(D_in)) { showFeedback("Please fill in all numbers!", 'warning'); return; }
-            isCorrect = checkMathematicalMatch(A_in, B_in, C_in, D_in, target.a, target.b, target.c) ||
-                        checkMathematicalMatch(C_in, D_in, A_in, B_in, target.a, target.b, target.c);
+            if (gcfVal !== targetGcf) { showFeedback("Check the common factor in the dashed box!", 'warning'); return; }
+
+            isCorrect = checkMathematicalMatch(A_in, B_in, C_in, D_in, a_prime, b_prime, c_prime) ||
+                        checkMathematicalMatch(C_in, D_in, A_in, B_in, a_prime, b_prime, c_prime);
         }
 
         if (isCorrect) {
-            showFeedback("Correct! You built a perfect rectangle and factored it.", 'correct');
+            showFeedback("Correct! You factored out the common factor and built the rectangle.", 'correct');
             if (currentMode !== 4 && document.getElementById('next-btn').style.display !== 'inline-block') {
                 score += 10; document.getElementById('score').innerText = score;
                 document.getElementById('next-btn').style.display = 'inline-block';
@@ -508,11 +590,16 @@
     }
 
     function nextQuestion() {
-        if (currentMode !== 4) { initLevel(); }
+        if (currentMode === 0) {
+            mode0Index = (mode0Index + 1) % mode0Questions.length;
+            initLevel();
+        } else if (currentMode !== 4) {
+            initLevel();
+        }
     }
 
     function resetAnswerInputs() {
-        ['ans-a', 'ans-b', 'ans-c', 'ans-d', 'ps-ans-a', 'ps-ans-b'].forEach(id => {
+        ['ans-a', 'ans-b', 'ans-c', 'ans-d', 'ps-ans-a', 'ps-ans-b', 'ps-gcf', 'std-gcf'].forEach(id => {
             const el = document.getElementById(id); if (el) el.value = '';
         });
         document.getElementById('next-btn').style.display = 'none';
@@ -528,7 +615,7 @@
         }).from(element).save();
     }
 
-    window.onload = () => { setMode(1, document.querySelector('.mode-btn.active')); };
+    window.onload = () => { setMode(0, document.querySelector('.mode-btn.active')); };
 </script>
 </body>
 </html>
