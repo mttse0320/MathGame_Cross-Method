@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Factorization Game</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
@@ -22,10 +22,11 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
-            padding: 20px;
+            padding: 15px;
             display: flex;
             flex-direction: column;
             align-items: center;
+            touch-action: manipulation;
         }
 
         #game-container {
@@ -35,6 +36,7 @@
             box-shadow: 0 8px 16px rgba(0,0,0,0.1);
             max-width: 900px;
             width: 100%;
+            box-sizing: border-box;
         }
 
         .header-controls {
@@ -115,14 +117,15 @@
 
         #workspace {
             width: 100%;
-            height: 450px;
+            height: 420px;
             border: 2px dashed #ccc;
             border-radius: 8px;
             position: relative;
             overflow: hidden;
             background-color: #fafbfc;
             margin-bottom: 20px;
-            touch-action: none; /* Disables default scrolling inside workspace when touching tiles */
+            touch-action: none;
+            box-sizing: border-box;
         }
 
         .tile {
@@ -138,10 +141,11 @@
             -webkit-user-select: none;
             border: 1px solid rgba(0,0,0,0.1);
             transition: transform 0.1s;
-            touch-action: none; /* Prevents mobile scrolling on tile drag */
+            touch-action: none;
+            box-sizing: border-box;
         }
         
-        .tile:active { cursor: grabbing; z-index: 1000 !important; }
+        .tile:active { cursor: grabbing; }
 
         .tile-x2 { width: 90px; height: 90px; }
         .tile-x { width: 30px; height: 90px; cursor: pointer; }
@@ -205,7 +209,7 @@
     
     <div class="instructions">
         <strong>Instructions:</strong> Drag tiles to form a perfect rectangle. <br>
-        <em>Double-tap an 'x' tile to rotate it. Drag tiles off the board to delete them (Custom Mode).</em>
+        <em>Double-tap or double-click an 'x' tile to rotate it. Drag tiles off the board to delete them (Custom Mode).</em>
     </div>
 
     <div class="tile-bank" id="tile-bank">
@@ -238,7 +242,7 @@
     let currentMode = 1;
     let score = 0;
     let activeQuestionData = { a: 1, b: 2, c: 1 };
-    let tileZIndex = 1;
+    let maxZIndex = 10;
 
     function showFeedback(message, type) {
         const fb = document.getElementById('feedback-message');
@@ -266,128 +270,4 @@
             D = B;
         } else {
             C = Math.floor(Math.random() * 2) + 1;
-            D = Math.floor(Math.random() * 4) + 1; 
-        }
-
-        let a = A * C;
-        let b = (A * D) + (B * C);
-        let c = B * D;
-
-        return { a, b, c };
-    }
-
-    function setMode(modeNum, btnElement) {
-        currentMode = modeNum;
-        score = 0; document.getElementById('score').innerText = score;
-        showFeedback('', 'none');
-
-        document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
-        btnElement.classList.add('active');
-
-        const stdArea = document.getElementById('standard-question-area');
-        const custArea = document.getElementById('custom-input-area');
-        const psAnswer = document.getElementById('perfect-square-answer-area');
-        const stdAnswer = document.getElementById('standard-answer-area');
-        const tileBank = document.getElementById('tile-bank');
-        
-        if (modeNum === 1) { psAnswer.style.display = 'flex'; stdAnswer.style.display = 'none'; } 
-        else { psAnswer.style.display = 'none'; stdAnswer.style.display = 'flex'; }
-
-        if (modeNum === 4) {
-            stdArea.style.display = 'none'; 
-            custArea.style.display = 'flex';
-            tileBank.style.display = 'flex'; 
-            setCustomQuestion();
-        } else {
-            stdArea.style.display = 'block'; 
-            custArea.style.display = 'none';
-            tileBank.style.display = 'none'; 
-            initLevel();
-        }
-    }
-
-    function initLevel() {
-        if(currentMode !== 4) {
-            activeQuestionData = generateQuestion(currentMode);
-            document.getElementById('equation-display').innerText = formatEquation(activeQuestionData.a, activeQuestionData.b, activeQuestionData.c);
-            autoSpawnTiles(activeQuestionData.a, activeQuestionData.b, activeQuestionData.c);
-        }
-        resetAnswerInputs();
-    }
-
-    function setCustomQuestion() {
-        const a = parseInt(document.getElementById('cust-a').value) || 0;
-        const b = parseInt(document.getElementById('cust-b').value) || 0;
-        const c = parseInt(document.getElementById('cust-c').value) || 0;
-        
-        if (a < 1 || b < 1 || c < 1 || a > 10 || b > 20 || c > 20) {
-            showFeedback("Please keep values positive (a: 1-10, b/c: 1-20) to keep the board clean!", 'warning');
-            return;
-        }
-        
-        activeQuestionData = { a, b, c };
-        clearWorkspace();
-        resetAnswerInputs();
-        showFeedback("Custom positive equation set! Add tiles from the bank to build it.", 'correct');
-    }
-
-    function clearWorkspace() {
-        document.getElementById('workspace').innerHTML = '';
-        tileZIndex = 1;
-    }
-
-    function getFactors(a, b, c) {
-        for (let A = 1; A <= a; A++) {
-            if (a % A !== 0) continue;
-            let C = a / A;
-            for (let B = 1; B <= c; B++) {
-                if (c % B !== 0) continue;
-                let D = c / B;
-                if (A * D + B * C === b) {
-                    return {A, B, C, D};
-                }
-            }
-        }
-        return null;
-    }
-
-    function autoSpawnTiles(a, b, c) {
-        clearWorkspace();
-        const factors = getFactors(a, b, c);
-        if (!factors) {
-            showFeedback("Error: Equation is not easily factorable.", 'warning');
-            return;
-        }
-
-        const {A, B, C, D} = factors;
-        spawnSpecificTiles(A * C, 'tile-x2', 'pos-x2', '+');
-        spawnSpecificTiles(A * D, 'tile-x', 'pos-x', '+');
-        spawnSpecificTiles(B * C, 'tile-x', 'pos-x', '+');
-        spawnSpecificTiles(B * D, 'tile-1', 'pos-1', '+');
-    }
-
-    function spawnSpecificTiles(count, shapeClass, posClass, signText) {
-        if (count === 0) return;
-        for (let i = 0; i < count; i++) {
-            addTile(shapeClass, posClass, signText);
-        }
-    }
-
-    function addTile(shapeClass, colorClass, signText) {
-        const workspace = document.getElementById('workspace');
-        const tile = document.createElement('div');
-        tile.className = `tile ${shapeClass} ${colorClass}`;
-        tile.innerText = signText;
-        tile.style.zIndex = tileZIndex++;
-        
-        tile.style.left = `${(workspace.offsetWidth / 2) - 45 + (Math.random()*150-75)}px`;
-        tile.style.top = `${(workspace.offsetHeight / 2) - 45 + (Math.random()*150-75)}px`;
-
-        // Double tap or double click rotation logic for mobile & desktop
-        let lastTap = 0;
-        if(shapeClass === 'tile-x') {
-            tile.addEventListener('pointerdown', (e) => {
-                const currentTime = new Date().getTime();
-                const tapLength = currentTime - lastTap;
-                if (tapLength < 300 && tapLength > 0) {
-                    tile.classList.toggle('
+            D = Math.floor(Math.random() * 4) + 1;
