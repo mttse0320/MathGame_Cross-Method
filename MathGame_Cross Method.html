@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factorization Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f0f8ff; 
+            --text-color: #333333;
+            --workspace-bg: #ffffff;
+            --blue-tile: #6495ED; 
+            --green-tile: #90EE90; 
+            --yellow-tile: #FFD700; 
+            --primary-btn: #4CAF50;
+            --secondary-btn: #2196F3;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #game-container {
+            background-color: var(--workspace-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .score-display { font-size: 1.2em; font-weight: bold; color: #2e8b57; }
+
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background-color: var(--primary-btn);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            font-size: 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        button:hover { background-color: #45a049; }
+        button:active { transform: scale(0.98); }
+        .mode-btn { background-color: #ddd; color: #333; }
+        .mode-btn.active { background-color: var(--secondary-btn); color: white; }
+        button.pdf-btn { background-color: #008CBA; }
+        button.danger-btn { background-color: #e74c3c; }
+
+        .question-area {
+            text-align: center;
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            min-height: 40px;
+        }
+
+        .custom-input-area {
+            display: none; 
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .tile-bank {
+            display: none; 
+            justify-content: center;
+            gap: 15px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .bank-item { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+
+        .bank-btn {
+            width: 50px; height: 50px;
+            font-weight: bold; font-size: 1.3em;
+            display: flex; justify-content: center; align-items: center;
+            border: 1px solid rgba(0,0,0,0.2);
+            color: rgba(0,0,0,0.7);
+            cursor: pointer;
+        }
+
+        #workspace {
+            width: 100%;
+            height: 450px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+            background-color: #fafbfc;
+            margin-bottom: 20px;
+        }
+
+        .tile {
+            position: absolute;
+            cursor: grab;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            color: rgba(0,0,0,0.6);
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+            user-select: none;
+            border: 1px solid rgba(0,0,0,0.1);
+            transition: transform 0.1s;
+        }
+        
+        .tile:active { cursor: grabbing; z-index: 1000 !important; }
+
+        .tile-x2 { width: 90px; height: 90px; }
+        .tile-x { width: 30px; height: 90px; cursor: pointer; }
+        .tile-x.rotated { width: 90px; height: 30px; }
+        .tile-1 { width: 30px; height: 30px; }
+
+        .pos-x2 { background-color: var(--blue-tile); }
+        .pos-x { background-color: var(--green-tile); }
+        .pos-1 { background-color: var(--yellow-tile); }
+
+        .answer-area {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.3em;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .action-area { display: flex; justify-content: center; gap: 10px; margin-bottom: 10px; }
+
+        input[type="number"] {
+            width: 55px; padding: 8px; font-size: 1em;
+            border: 2px solid #ccc; border-radius: 4px; text-align: center;
+        }
+        
+        .instructions { font-size: 0.9em; color: #666; text-align: center; margin-bottom: 10px; }
+        .feedback-area { text-align: center; font-size: 1.1em; font-weight: bold; min-height: 25px; margin-top: 5px; }
+        .feedback-correct { color: #2e8b57; }
+        .feedback-incorrect { color: #d9534f; }
+        .feedback-warning { color: #d35400; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div class="header-controls">
+        <div class="score-display">Score: <span id="score">0</span></div>
+        <h2>Factorization Game</h2>
+        <button class="pdf-btn" onclick="saveToPDF()">Save to PDF</button>
+    </div>
+
+    <div class="mode-selector">
+        <button class="mode-btn active" onclick="setMode(1, this)">Mode 1: Perfect Square</button>
+        <button class="mode-btn" onclick="setMode(2, this)">Mode 2: Cross-Method</button>
+        <button class="mode-btn" onclick="setMode(3, this)">Mode 3: Random</button>
+        <button class="mode-btn" onclick="setMode(4, this)">Mode 4: Custom</button>
+    </div>
+
+    <div class="question-area" id="standard-question-area">
+        Factorize: <strong id="equation-display"></strong>
+    </div>
+
+    <div class="custom-input-area" id="custom-input-area">
+        <input type="number" id="cust-a" placeholder="a" value="1" min="1" max="10"> x² + 
+        <input type="number" id="cust-b" placeholder="b" value="5" min="1" max="20"> x + 
+        <input type="number" id="cust-c" placeholder="c" value="6" min="1" max="20">
+        <button onclick="setCustomQuestion()">Set Question</button>
+    </div>
+    
+    <div class="instructions">
+        <strong>Instructions:</strong> Drag tiles to form a perfect rectangle. <br>
+        <em>Double-click a rectangle 'x' tile to rotate it. Drag tiles off the board to delete them (Custom Mode).</em>
+    </div>
+
+    <div class="tile-bank" id="tile-bank">
+        <div class="bank-item"><button class="bank-btn pos-x2" onclick="addTile('tile-x2', 'pos-x2', '+')">+x²</button></div>
+        <div class="bank-item"><button class="bank-btn pos-x" onclick="addTile('tile-x', 'pos-x', '+')">+x</button></div>
+        <div class="bank-item"><button class="bank-btn pos-1" onclick="addTile('tile-1', 'pos-1', '+')">+1</button></div>
+        <div class="bank-item" style="margin-left: 20px;"><button class="danger-btn" onclick="clearWorkspace()">Clear Board</button></div>
+    </div>
+
+    <div id="workspace"></div>
+
+    <div class="answer-area" id="perfect-square-answer-area">
+        ( <input type="number" id="ps-ans-a" placeholder="a">x + <input type="number" id="ps-ans-b" placeholder="b"> )²
+    </div>
+
+    <div class="answer-area" id="standard-answer-area" style="display:none;">
+        ( <input type="number" id="ans-a" placeholder="a">x + <input type="number" id="ans-b" placeholder="b"> ) 
+        ( <input type="number" id="ans-c" placeholder="c">x + <input type="number" id="ans-d" placeholder="d"> )
+    </div>
+
+    <div class="action-area">
+        <button onclick="checkAnswer()">Check Answer</button>
+        <button onclick="nextQuestion()" id="next-btn" style="display:none; background-color: #f39c12;">Next Question</button>
+    </div>
+
+    <div id="feedback-message" class="feedback-area"></div>
+</div>
+
+<script>
+    let currentMode = 1;
+    let score = 0;
+    let activeQuestionData = { a: 1, b: 2, c: 1 };
+    let tileZIndex = 1;
+
+    function showFeedback(message, type) {
+        const fb = document.getElementById('feedback-message');
+        fb.innerText = message;
+        if (type === 'correct') fb.className = 'feedback-area feedback-correct';
+        else if (type === 'warning') fb.className = 'feedback-area feedback-warning';
+        else fb.className = 'feedback-area feedback-incorrect';
+    }
+
+    function formatEquation(a, b, c) {
+        let eqStr = "";
+        eqStr += (a === 1 ? "" : a) + "x² ";
+        eqStr += "+ " + (b === 1 ? "" : b) + "x ";
+        eqStr += "+ " + c;
+        return eqStr;
+    }
+
+    // NEW: Random Question Generator Working Backwards
+    function generateQuestion(mode) {
+        let A, B, C, D;
+        
+        // Pick random numbers between 1 and 3 (to keep tile counts low for the screen)
+        A = Math.floor(Math.random() * 2) + 1; // 1 or 2
+        B = Math.floor(Math.random() * 3) + 1; // 1 to 3
+        
+        if (mode === 1 || (mode === 3 && Math.random() < 0.5)) {
+            // Perfect Square: (Ax + B)(Ax + B)
+            C = A;
+            D = B;
+        } else {
+            // Cross-Method: (Ax + B)(Cx + D)
+            C = Math.floor(Math.random() * 2) + 1;
+            D = Math.floor(Math.random() * 4) + 1; 
+        }
+
+        // Expand to a, b, c
+        let a = A * C;
+        let b = (A * D) + (B * C);
+        let c = B * D;
+
+        return { a, b, c };
+    }
+
+    function setMode(modeNum, btnElement) {
+        currentMode = modeNum;
+        score = 0; document.getElementById('score').innerText = score;
+        showFeedback('', 'none');
+
+        document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+        btnElement.classList.add('active');
+
+        const stdArea = document.getElementById('standard-question-area');
+        const custArea = document.getElementById('custom-input-area');
+        const psAnswer = document.getElementById('perfect-square-answer-area');
+        const stdAnswer = document.getElementById('standard-answer-area');
+        const tileBank = document.getElementById('tile-bank');
+        
+        if (modeNum === 1) { psAnswer.style.display = 'flex'; stdAnswer.style.display = 'none'; } 
+        else { psAnswer.style.display = 'none'; stdAnswer.style.display = 'flex'; }
+
+        if (modeNum === 4) {
+            stdArea.style.display = 'none'; 
+            custArea.style.display = 'flex';
+            tileBank.style.display = 'flex'; 
+            setCustomQuestion();
+        } else {
+            stdArea.style.display = 'block'; 
+            custArea.style.display = 'none';
+            tileBank.style.display = 'none'; 
+            initLevel();
+        }
+    }
+
+    function initLevel() {
+        if(currentMode !== 4) {
+            activeQuestionData = generateQuestion(currentMode); // Calls our new random generator!
+            document.getElementById('equation-display').innerText = formatEquation(activeQuestionData.a, activeQuestionData.b, activeQuestionData.c);
+            autoSpawnTiles(activeQuestionData.a, activeQuestionData.b, activeQuestionData.c);
+        }
+        resetAnswerInputs();
+    }
+
+    function setCustomQuestion() {
+        const a = parseInt(document.getElementById('cust-a').value) || 0;
+        const b = parseInt(document.getElementById('cust-b').value) || 0;
+        const c = parseInt(document.getElementById('cust-c').value) || 0;
+        
+        if (a < 1 || b < 1 || c < 1 || a > 10 || b > 20 || c > 20) {
+            showFeedback("Please keep values positive (a: 1-10, b/c: 1-20) to keep the board clean!", 'warning');
+            return;
+        }
+        
+        activeQuestionData = { a, b, c };
+        clearWorkspace();
+        resetAnswerInputs();
+        showFeedback("Custom positive equation set! Add tiles from the bank to build it.", 'correct');
+    }
+
+    function clearWorkspace() {
+        document.getElementById('workspace').innerHTML = '';
+        tileZIndex = 1;
+    }
+
+    function getFactors(a, b, c) {
+        for (let A = 1; A <= a; A++) {
+            if (a % A !== 0) continue;
+            let C = a / A;
+            for (let B = 1; B <= c; B++) {
+                if (c % B !== 0) continue;
+                let D = c / B;
+                if (A * D + B * C === b) {
+                    return {A, B, C, D};
+                }
+            }
+        }
+        return null;
+    }
+
+    function autoSpawnTiles(a, b, c) {
+        clearWorkspace();
+        const factors = getFactors(a, b, c);
+        if (!factors) {
+            showFeedback("Error: Equation is not easily factorable.", 'warning');
+            return;
+        }
+
+        const {A, B, C, D} = factors;
+        spawnSpecificTiles(A * C, 'tile-x2', 'pos-x2', '+');
+        spawnSpecificTiles(A * D, 'tile-x', 'pos-x', '+');
+        spawnSpecificTiles(B * C, 'tile-x', 'pos-x', '+');
+        spawnSpecificTiles(B * D, 'tile-1', 'pos-1', '+');
+    }
+
+    function spawnSpecificTiles(count, shapeClass, posClass, signText) {
+        if (count === 0) return;
+        for (let i = 0; i < count; i++) {
+            addTile(shapeClass, posClass, signText);
+        }
+    }
+
+    function addTile(shapeClass, colorClass, signText) {
+        const workspace = document.getElementById('workspace');
+        const tile = document.createElement('div');
+        tile.className = `tile ${shapeClass} ${colorClass}`;
+        tile.innerText = signText;
+        tile.style.zIndex = tileZIndex++;
+        
+        tile.style.left = `${(workspace.offsetWidth / 2) - 45 + (Math.random()*150-75)}px`;
+        tile.style.top = `${(workspace.offsetHeight / 2) - 45 + (Math.random()*150-75)}px`;
+
+        if(shapeClass === 'tile-x') {
+            tile.addEventListener('dblclick', function() { this.classList.toggle('rotated'); });
+        }
+
+        let isDragging = false, startX, startY, initialLeft, initialTop;
+
+        tile.addEventListener('mousedown', (e) => {
+            isDragging = true; startX = e.clientX; startY = e.clientY;
+            initialLeft = parseInt(tile.style.left, 10) || 0; initialTop = parseInt(tile.style.top, 10) || 0;
+            
+            document.querySelectorAll('.tile').forEach(t => t.style.zIndex = parseInt(t.style.zIndex) > 0 ? parseInt(t.style.zIndex) - 1 : 0);
+            tile.style.zIndex = 1000;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            tile.style.left = `${initialLeft + (e.clientX - startX)}px`;
+            tile.style.top = `${initialTop + (e.clientY - startY)}px`;
+        });
+
+        document.addEventListener('mouseup', (e) => { 
+            if(isDragging) {
+                isDragging = false; 
+                if (currentMode === 4) {
+                    const rect = workspace.getBoundingClientRect();
+                    if (e.clientX < rect.left - 20 || e.clientX > rect.right + 20 || e.clientY < rect.top - 20 || e.clientY > rect.bottom + 20) {
+                        if (tile.parentNode === workspace) workspace.removeChild(tile);
+                    }
+                }
+            }
+        });
+        
+        workspace.appendChild(tile);
+    }
+
+    function checkMathematicalMatch(A, B, C, D, a, b, c) {
+        return (A * C === a) && ((A * D) + (B * C) === b) && (B * D === c);
+    }
+
+    function checkAnswer() {
+        if (!document.getElementById('workspace').hasChildNodes()) {
+            showFeedback("The board is empty!", 'warning'); return;
+        }
+
+        const target = activeQuestionData;
+        let isCorrect = false;
+
+        if (currentMode === 1) {
+            const A_in = parseInt(document.getElementById('ps-ans-a').value) || 1; 
+            const B_in = parseInt(document.getElementById('ps-ans-b').value);
+            if (isNaN(B_in)) { showFeedback("Please fill in the number!", 'warning'); return; }
+            isCorrect = checkMathematicalMatch(A_in, B_in, A_in, B_in, target.a, target.b, target.c);
+        } else {
+            const A_in = parseInt(document.getElementById('ans-a').value) || 1; 
+            const B_in = parseInt(document.getElementById('ans-b').value);
+            const C_in = parseInt(document.getElementById('ans-c').value) || 1;
+            const D_in = parseInt(document.getElementById('ans-d').value);
+
+            if (isNaN(B_in) || isNaN(D_in)) { showFeedback("Please fill in all numbers!", 'warning'); return; }
+            isCorrect = checkMathematicalMatch(A_in, B_in, C_in, D_in, target.a, target.b, target.c) ||
+                        checkMathematicalMatch(C_in, D_in, A_in, B_in, target.a, target.b, target.c);
+        }
+
+        if (isCorrect) {
+            showFeedback("Correct! You built a perfect rectangle and factored it.", 'correct');
+            if (currentMode !== 4 && document.getElementById('next-btn').style.display !== 'inline-block') {
+                score += 10; document.getElementById('score').innerText = score;
+                document.getElementById('next-btn').style.display = 'inline-block';
+            }
+        } else {
+            showFeedback("Not quite right. Check your factors!", 'incorrect');
+        }
+    }
+
+    function nextQuestion() {
+        if (currentMode !== 4) { initLevel(); } // Now simply generates a new level!
+    }
+
+    function resetAnswerInputs() {
+        ['ans-a', 'ans-b', 'ans-c', 'ans-d', 'ps-ans-a', 'ps-ans-b'].forEach(id => {
+            const el = document.getElementById(id); if (el) el.value = '';
+        });
+        document.getElementById('next-btn').style.display = 'none';
+        showFeedback('', 'none');
+    }
+
+    function saveToPDF() {
+        const element = document.getElementById('game-container');
+        html2pdf().set({
+            margin: 0.5, filename: 'Factorization_Game.pdf',
+            image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 },
+            jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+        }).from(element).save();
+    }
+
+    window.onload = () => { setMode(1, document.querySelector('.mode-btn.active')); };
+</script>
+</body>
+</html>
