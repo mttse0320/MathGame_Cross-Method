@@ -135,11 +135,12 @@
             justify-content: center;
             align-items: center;
             font-weight: bold;
+            font-size: 1.2em;
             color: rgba(0,0,0,0.6);
             box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
             user-select: none;
             -webkit-user-select: none;
-            border: 1px solid rgba(0,0,0,0.1);
+            border: 1px solid rgba(0,0,0,0.2);
             transition: transform 0.1s;
             touch-action: none;
             box-sizing: border-box;
@@ -220,9 +221,10 @@
     </div>
 
     <div class="tile-bank" id="tile-bank">
-        <div class="bank-item"><button class="bank-btn pos-x2" onclick="addTile('tile-x2', 'pos-x2', '+')">+x²</button></div>
-        <div class="bank-item"><button class="bank-btn pos-x" onclick="addTile('tile-x', 'pos-x', '+')">+x</button></div>
-        <div class="bank-item"><button class="bank-btn pos-1" onclick="addTile('tile-1', 'pos-1', '+')">+1</button></div>
+        <!-- LABELS UPDATED TO x², x, and 1 -->
+        <div class="bank-item"><button class="bank-btn pos-x2" onclick="addTile('tile-x2', 'pos-x2', 'x²')">x²</button></div>
+        <div class="bank-item"><button class="bank-btn pos-x" onclick="addTile('tile-x', 'pos-x', 'x')">x</button></div>
+        <div class="bank-item"><button class="bank-btn pos-1" onclick="addTile('tile-1', 'pos-1', '1')">1</button></div>
         <div class="bank-item" style="margin-left: 20px;"><button class="danger-btn" onclick="clearWorkspace()">Clear Board</button></div>
     </div>
 
@@ -312,7 +314,6 @@
             newQuestion = { a, b, c };
             attempts++;
 
-            // Restraint range: max coefficient <= 8
             if (a <= 8 && b <= 8 && c <= 8) {
                 if (activeQuestionData === null || 
                     newQuestion.a !== activeQuestionData.a || 
@@ -433,10 +434,11 @@
         }
 
         const {A, B, C, D} = factors;
-        spawnSpecificTiles(A * C, 'tile-x2', 'pos-x2', '+');
-        spawnSpecificTiles(A * D, 'tile-x', 'pos-x', '+');
-        spawnSpecificTiles(B * C, 'tile-x', 'pos-x', '+');
-        spawnSpecificTiles(B * D, 'tile-1', 'pos-1', '+');
+        // LABELS UPDATED HERE AS WELL
+        spawnSpecificTiles(A * C, 'tile-x2', 'pos-x2', 'x²');
+        spawnSpecificTiles(A * D, 'tile-x', 'pos-x', 'x');
+        spawnSpecificTiles(B * C, 'tile-x', 'pos-x', 'x');
+        spawnSpecificTiles(B * D, 'tile-1', 'pos-1', '1');
     }
 
     function spawnSpecificTiles(count, shapeClass, posClass, signText) {
@@ -444,6 +446,64 @@
         for (let i = 0; i < count; i++) {
             addTile(shapeClass, posClass, signText);
         }
+    }
+
+    // SNAP LOGIC
+    function snapToOtherTiles(draggedTile) {
+        const threshold = 20; // Snapping distance in pixels
+        let currentLeft = parseInt(draggedTile.style.left, 10);
+        let currentTop = parseInt(draggedTile.style.top, 10);
+        const w1 = draggedTile.offsetWidth;
+        const h1 = draggedTile.offsetHeight;
+
+        const allTiles = document.querySelectorAll('.tile');
+        let snappedX = false;
+        let snappedY = false;
+
+        for (let target of allTiles) {
+            if (target === draggedTile) continue;
+
+            const targetLeft = parseInt(target.style.left, 10);
+            const targetTop = parseInt(target.style.top, 10);
+            const w2 = target.offsetWidth;
+            const h2 = target.offsetHeight;
+
+            // Check X-axis snapping
+            if (!snappedX) {
+                // Snap dragged left edge to target right edge
+                if (Math.abs(currentLeft - (targetLeft + w2)) < threshold) {
+                    currentLeft = targetLeft + w2; snappedX = true;
+                }
+                // Snap dragged right edge to target left edge
+                else if (Math.abs((currentLeft + w1) - targetLeft) < threshold) {
+                    currentLeft = targetLeft - w1; snappedX = true;
+                }
+                // Align left edges
+                else if (Math.abs(currentLeft - targetLeft) < threshold) {
+                    currentLeft = targetLeft; snappedX = true;
+                }
+            }
+
+            // Check Y-axis snapping
+            if (!snappedY) {
+                // Snap dragged top edge to target bottom edge
+                if (Math.abs(currentTop - (targetTop + h2)) < threshold) {
+                    currentTop = targetTop + h2; snappedY = true;
+                }
+                // Snap dragged bottom edge to target top edge
+                else if (Math.abs((currentTop + h1) - targetTop) < threshold) {
+                    currentTop = targetTop - h1; snappedY = true;
+                }
+                // Align top edges
+                else if (Math.abs(currentTop - targetTop) < threshold) {
+                    currentTop = targetTop; snappedY = true;
+                }
+            }
+        }
+
+        // Apply snapped coordinates
+        draggedTile.style.left = `${currentLeft}px`;
+        draggedTile.style.top = `${currentTop}px`;
     }
 
     function addTile(shapeClass, colorClass, signText) {
@@ -483,6 +543,8 @@
             const now = new Date().getTime();
             if (shapeClass === 'tile-x' && (now - lastTap < 300) && (now - lastTap > 0)) {
                 tile.classList.toggle('rotated');
+                // Optional: Snap immediately after rotation
+                snapToOtherTiles(tile);
                 if (e.cancelable) e.preventDefault();
                 lastTap = 0;
                 return;
@@ -521,8 +583,12 @@
                 const coords = getCoordinates(e);
                 if (coords.x < rect.left - 20 || coords.x > rect.right + 20 || coords.y < rect.top - 20 || coords.y > rect.bottom + 20) {
                     if (tile.parentNode === workspace) workspace.removeChild(tile);
+                    return; // Avoid snapping if deleted
                 }
             }
+            
+            // Trigger snap physics on drop
+            snapToOtherTiles(tile);
         }
 
         tile.addEventListener('touchstart', handleStart, { passive: false });
